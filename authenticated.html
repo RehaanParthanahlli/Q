@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BB84 — Quantum Lab</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg1:#02021a;--bg2:#071033;--cyan:#18d6ff;--violet:#b36cff;--glass:rgba(255,255,255,0.03);--muted:rgba(230,240,255,0.8)}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:#e6f2ff;background:linear-gradient(180deg,var(--bg1),var(--bg2));overflow:hidden}
+    .app{display:grid;grid-template-columns:1fr 420px;gap:20px;padding:22px;height:100vh}
+    header{display:flex;gap:14px;align-items:center}
+    .logo{width:60px;height:60px;border-radius:12px;background:linear-gradient(90deg,var(--cyan),var(--violet));display:flex;align-items:center;justify-content:center;font-family:Orbitron;color:#07102a}
+    h1{margin:0;font-family:Orbitron;font-size:18px}
+    .subtitle{color:var(--muted);font-size:13px}
+    .panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:12px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    .stage{height:420px;position:relative;border-radius:10px;overflow:hidden}
+    .line{position:absolute;left:40px;right:40px;top:50%;height:2px;background:rgba(255,255,255,0.03);transform:translateY(-50%)}
+    .node{position:absolute;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+    .box{width:120px;height:70px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;font-weight:700}
+    .small{font-size:13px;color:var(--muted)}
+    .photon{width:14px;height:14px;border-radius:50%;position:absolute;top:50%;transform:translate(-50%,-50%);box-shadow:0 8px 24px rgba(0,0,0,0.6)}
+    .photon.cyan{background:radial-gradient(circle at 30% 30%, #bff8ff,#18d6ff)}
+    .photon.violet{background:radial-gradient(circle at 30% 30%, #f0d7ff,#b36cff)}
+    .controls{display:flex;gap:8px;align-items:center}
+    .btn{padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit;cursor:pointer;font-weight:700}
+    .btn.primary{background:linear-gradient(90deg,var(--cyan),var(--violet));color:#07102a;border:none}
+    .progress{height:10px;background:rgba(255,255,255,0.03);border-radius:8px;overflow:hidden}
+    .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--violet));width:0%}
+    .key{font-family:Orbitron,monospace;padding:8px;border-radius:8px;background:rgba(0,0,0,0.18);text-align:center}
+    .side-scroll{overflow:auto;max-height:84vh;padding-right:6px}
+    .log{font-family:monospace;white-space:pre-line;font-size:13px;background:rgba(0,0,0,0.12);padding:10px;border-radius:8px}
+    .terms{font-size:13px;color:var(--muted)}
+    @media (max-width:980px){.app{grid-template-columns:1fr;overflow:auto;height:100vh}.stage{height:320px}}
+    /* particles */
+    #particles{position:fixed;inset:0;z-index:0;pointer-events:none}
+  </style>
+</head>
+<body>
+  <canvas id="particles"></canvas>
+  <div class="app" style="position:relative;z-index:1">
+    <div>
+      <header>
+        <div class="logo">Q</div>
+        <div>
+          <h1>BB84 — Quantum Lab</h1>
+          <div class="subtitle">Minimal text. Interactive photon flow. Toggle Eve to observe errors.</div>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="stage" id="stage">
+          <div class="line"></div>
+
+          <div class="node" style="left:6%">
+            <div class="box">Alice</div>
+          </div>
+
+          <div class="node" style="left:50%">
+            <div class="box">Channel</div>
+          </div>
+
+          <div class="node" style="left:94%">
+            <div class="box">Bob</div>
+          </div>
+
+          <div id="photonLayer"></div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+          <div class="controls">
+            <button class="btn primary" id="runBtn">Run</button>
+            <button class="btn" id="stepBtn">Step</button>
+            <button class="btn" id="resetBtn">Reset</button>
+            <button class="btn" id="eveBtn">Eve: OFF</button>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center">
+            <div style="text-align:right">
+              <div class="small">Progress</div>
+              <div class="progress" style="width:220px"><i id="progBar"></i></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div style="display:flex;gap:12px;margin-top:12px">
+        <div class="panel" style="flex:1">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div class="small">Sifted key</div>
+              <div class="key" id="siftKey">— — —</div>
+            </div>
+            <div style="text-align:right">
+              <div class="small">Error</div>
+              <div id="errRate" style="font-weight:800">0%</div>
+            </div>
+          </div>
+
+          <div style="margin-top:8px;font-size:13px;color:var(--muted)">Settings: Qubits & Eve prob.</div>
+        </div>
+
+        <div class="panel" style="width:260px">
+          <div class="small">Settings</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+            <label class="small">Qubits: <input id="nQ" type="range" min="4" max="24" value="12"></label>
+            <label class="small">Eve prob: <input id="eveProb" type="range" min="0" max="1" step="0.05" value="0.3"></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="panel side-scroll" style="width:420px">
+      <div>
+        <div class="small">Run log</div>
+        <div class="log" id="log">Ready</div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="small">Raw data</div>
+        <pre class="log" id="rawData">—</pre>
+      </div>
+    </aside>
+  </div>
+
+<script>
+// ===== particles background =====
+const canvas = document.getElementById('particles');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = window.innerWidth; let H = canvas.height = window.innerHeight;
+const particles = [];
+for(let i=0;i<120;i++){ particles.push({x:Math.random()*W,y:Math.random()*H, r:Math.random()*1.8+0.6, vx:(Math.random()-0.5)*0.2, vy:(Math.random()-0.5)*0.2, hue: Math.random()*360}) }
+function drawParticles(){ ctx.clearRect(0,0,W,H); for(const p of particles){ ctx.beginPath(); ctx.fillStyle = `rgba(200,220,255,${0.06 + p.r*0.02})`; ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); p.x += p.vx; p.y += p.vy; if(p.x<0) p.x=W; if(p.x>W) p.x=0; if(p.y<0) p.y=H; if(p.y>H) p.y=0 } requestAnimationFrame(drawParticles) }
+window.addEventListener('resize', ()=>{ W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight })
+requestAnimationFrame(drawParticles)
+
+// ===== simulation core =====
+const randBit = ()=> Math.random()<0.5?0:1
+const randBasis = ()=> Math.random()<0.5? 'Z':'X'
+const stage = document.getElementById('stage')
+const photonLayer = document.getElementById('photonLayer')
+const runBtn = document.getElementById('runBtn')
+const stepBtn = document.getElementById('stepBtn')
+const resetBtn = document.getElementById('resetBtn')
+const eveBtn = document.getElementById('eveBtn')
+const progBar = document.getElementById('progBar')
+const siftDisplay = document.getElementById('siftKey')
+const errRateEl = document.getElementById('errRate')
+const logEl = document.getElementById('log')
+const rawEl = document.getElementById('rawData')
+const nQ = document.getElementById('nQ')
+const eveProb = document.getElementById('eveProb')
+
+let eveOn = false
+let currentRun = null
+
+function prepare(n){ const aliceBits=[]; const aliceBases=[]; for(let i=0;i<n;i++){ aliceBits.push(randBit()); aliceBases.push(randBasis()) } return {aliceBits, aliceBases} }
+function transmit(state){ const n=state.aliceBits.length; const bobBases=[]; const bobResults=[]; const eveBases=[]; const eveResults=[]; for(let i=0;i<n;i++){ let bit=state.aliceBits[i]; let basis=state.aliceBases[i]; if(eveOn && Math.random() < parseFloat(eveProb.value)){ const eb=randBasis(); eveBases.push(eb); const eres=(eb===basis)? bit : randBit(); eveResults.push(eres); bit=eres; basis=eb } else { eveBases.push(null); eveResults.push(null) } const bb=randBasis(); bobBases.push(bb); const bres=(bb===basis)? bit : randBit(); bobResults.push(bres) } return {bobBases, bobResults, eveBases, eveResults} }
+function sift(state, received){ const sifted=[]; const indices=[]; for(let i=0;i<state.aliceBases.length;i++){ if(state.aliceBases[i]===received.bobBases[i]){ sifted.push(state.aliceBits[i]); indices.push(i) } } return {sifted,indices} }
+function errorRate(state, received, indices){ let errors=0,total=0; for(const i of indices){ total++; if(received.bobResults[i] !== state.aliceBits[i]) errors++ } return total? Math.round((errors/total)*100) : 0 }
+
+function renderRun(run){ const total = run.st.aliceBits.length; const done = run.sifted ? run.sifted.sifted.length : 0; const pct = Math.round((done/Math.max(1,total))*100); progBar.style.width = pct + '%'; siftDisplay.textContent = run.sifted && run.sifted.sifted.length ? run.sifted.sifted.join(' ') : '— — —'; errRateEl.textContent = (run.er!==undefined) ? run.er + '%' : '0%'; rawEl.textContent = formatRaw(run) }
+function formatRaw(run){ let s=''; s += 'Alice bits:   ' + run.st.aliceBits.join(' ') + '\n'; s += 'Alice bases:  ' + run.st.aliceBases.join(' ') + '\n'; s += 'Bob bases:    ' + run.rec.bobBases.join(' ') + '\n'; s += 'Bob results:  ' + run.rec.bobResults.join(' ') + '\n'; s += 'Eve bases:    ' + run.rec.eveBases.map(x=> x===null? '-' : x).join(' ') + '\n'; s += 'Eve results:  ' + run.rec.eveResults.map(x=> x===null? '-' : x).join(' ') + '\n'; if(run.sifted){ s += 'Sifted key:   ' + run.sifted.sifted.join(' ') + '\n' } if(run.er!==undefined){ s += 'Error rate:   ' + run.er + '%' } return s }
+function log(msg){ const t = new Date().toLocaleTimeString(); logEl.textContent = `[${t}] ${msg}\n` + logEl.textContent }
+function resetVisual(){ photonLayer.innerHTML=''; progBar.style.width='0%'; siftDisplay.textContent='— — —'; errRateEl.textContent='0%'; rawEl.textContent='—'; currentRun=null }
+
+// ---- full run ----
+function runFull(){ resetVisual(); const n = parseInt(nQ.value); const st = prepare(n); const rec = transmit(st); const siftedRes = sift(st,rec); const er = errorRate(st,rec,siftedRes.indices); currentRun = {st,rec,sifted:siftedRes,er}; renderRun(currentRun); log(`Run complete — qubits: ${n}, sifted: ${siftedRes.sifted.length}, error: ${er}%`) }
+
+// ---- step run (fixed coordinates relative to stage) ----
+function stepRun(){ if(currentRun && currentRun.running) return; resetVisual(); const n = parseInt(nQ.value); const st = prepare(n); const rec = transmit(st); currentRun = {st,rec,step:0,running:true}; animateNextPhoton() }
+
+function animateNextPhoton(){ const run = currentRun; const i = run.step; const n = run.st.aliceBits.length; if(i>=n){ // finalize
+    const siftedRes = sift(run.st,run.rec); const er = errorRate(run.st,run.rec,siftedRes.indices); run.sifted = siftedRes; run.er = er; run.running = false; renderRun(run); log(`Step run complete — sifted: ${siftedRes.sifted.length}, error: ${er}%`); return }
+
+  const startX = 40; const targetX = stage.clientWidth - 80; const ph = document.createElement('div'); ph.className = 'photon ' + (Math.random()<0.5? 'cyan':'violet'); photonLayer.appendChild(ph); ph.style.left = startX + 'px'; ph.style.top = (stage.clientHeight/2) + 'px';
+
+  const duration = 850; const start = performance.now(); const eveIntercepted = eveOn && Math.random() < parseFloat(eveProb.value);
+
+  // pulse at Alice
+  showPulse('Alice', run.st.aliceBits[i], run.st.aliceBases[i]);
+
+  function frame(t){ const p = Math.min(1,(t-start)/duration); const x = startX + (targetX - startX)*p; ph.style.left = x + 'px'; if(p<1) requestAnimationFrame(frame); else { // reached Bob
+        if(eveIntercepted){ ph.style.boxShadow = '0 8px 36px rgba(255,90,90,0.18)'; ph.style.background = 'linear-gradient(90deg, rgba(255,180,180,0.95), rgba(255,107,107,0.95))'; }
+        // small marker stays briefly
+        const mark = document.createElement('div'); mark.className='photon ' + (Math.random()<0.5? 'cyan':'violet'); mark.style.width='10px'; mark.style.height='10px'; mark.style.left = (targetX + 10) + 'px'; mark.style.top = ph.style.top; photonLayer.appendChild(mark);
+        setTimeout(()=>{ ph.remove(); if(mark) mark.remove() }, 420);
+        run.step++; setTimeout(animateNextPhoton, 160);
+      } }
+  requestAnimationFrame(frame);
+}
+
+function showPulse(node, bit, basis){ const bubble = document.createElement('div'); bubble.className='panel'; bubble.style.position='absolute'; bubble.style.left = node==='Alice' ? '6%' : (node==='Bob'? '94%':'50%'); bubble.style.top = '12%'; bubble.style.transform = 'translateX(-50%)'; bubble.style.zIndex=80; bubble.style.padding='8px'; bubble.style.fontSize='13px'; bubble.textContent = `${node}: ${bit} (${basis})`; stage.appendChild(bubble); setTimeout(()=>bubble.remove(),700) }
+
+// event wiring
+runBtn.addEventListener('click', ()=> runFull())
+stepBtn.addEventListener('click', ()=> stepRun())
+resetBtn.addEventListener('click', ()=>{ resetVisual(); log('Reset') })
+eveBtn.addEventListener('click', ()=>{ eveOn = !eveOn; eveBtn.textContent = eveOn ? 'Eve: ON' : 'Eve: OFF'; eveBtn.classList.toggle('primary', eveOn); log('Eve '+(eveOn?'ON':'OFF')) })
+
+// init
+resetVisual();
+</script>
+</body>
+</html>

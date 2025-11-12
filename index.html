@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>QLock — Quantum Gateway</title>
+  <script src="https://unpkg.com/@splinetool/runtime@latest/build/runtime.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at center, #0d0d16 0%, #0a0a0f 100%);
+      overflow: hidden;
+      height: 100vh;
+      color: #e0e0e0;
+    }
+
+    #spline-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; opacity: 0.35; }
+    .quantum-particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; }
+
+    .particle {
+      position: absolute; width: 2px; height: 2px; background: #00bfa5;
+      border-radius: 50%; opacity: 0.6; animation: float 6s infinite linear;
+    }
+    @keyframes float {
+      0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+      10%,90% { opacity: 0.6; }
+      100% { transform: translateY(-10vh) translateX(100px); opacity: 0; }
+    }
+
+    .content {
+      position: relative; z-index: 5;
+      height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(10px);
+    }
+
+    h1 {
+      font-size: 4rem;
+      background: linear-gradient(45deg, #00bfa5, #4fc3f7, #7c4dff);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 40px rgba(0, 191, 165, 0.4);
+      animation: glow 3s ease-in-out infinite alternate;
+      margin-bottom: 20px;
+    }
+    @keyframes glow { from { filter: brightness(1); } to { filter: brightness(1.3); } }
+
+    p { font-size: 1.2rem; color: #b0b0b0; margin-bottom: 50px; opacity: 0.85; }
+
+    button {
+      position: relative; background: none; border: 2px solid #00bfa5; color: #00bfa5;
+      font-size: 1.2rem; padding: 15px 50px; border-radius: 50px; cursor: pointer;
+      overflow: hidden; text-transform: uppercase; letter-spacing: 2px;
+      transition: all 0.3s ease;
+    }
+    button::before {
+      content: ""; position: absolute; top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0,191,165,0.3), transparent);
+      transition: 0.5s;
+    }
+    button:hover::before { left: 100%; }
+    button:hover { box-shadow: 0 0 30px rgba(0,191,165,0.6); color: #fff; background: rgba(0,191,165,0.1); }
+    button:active { transform: scale(0.98); }
+
+    .pulse {
+      position: absolute; width: 200px; height: 200px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,191,165,0.2) 0%, transparent 70%);
+      animation: pulse 3s infinite; z-index: -1;
+    }
+    @keyframes pulse { 0% { transform: scale(0.8); opacity: 0.5; }
+                       70% { transform: scale(1.5); opacity: 0; }
+                       100% { transform: scale(0.8); opacity: 0; } }
+
+    #status {
+      margin-top: 30px;
+      font-size: 1rem;
+      opacity: 0.8;
+      transition: color 0.5s, text-shadow 0.5s;
+    }
+    .connected { color: #00bfa5; text-shadow: 0 0 10px #00bfa5; }
+    .disconnected { color: #f44336; text-shadow: 0 0 10px #f44336; }
+  </style>
+</head>
+<body>
+  <div id="spline-container"><canvas id="spline-canvas"></canvas></div>
+  <div class="quantum-particles" id="particles"></div>
+
+  <div class="content">
+    <h1>🔐 QLock</h1>
+    <p>Quantum device link required</p>
+    <div class="pulse"></div>
+    <button id="getStarted">Get Started</button>
+    <div id="status" class="disconnected">Checking device connection...</div>
+  </div>
+
+  <script>
+    // Background spline
+    const canvas = document.getElementById('spline-canvas');
+    async function initSpline() {
+      try {
+        const { Application } = await import('https://unpkg.com/@splinetool/runtime@latest/build/runtime.js');
+        const spline = new Application(canvas);
+        await spline.load('https://prod.spline.design/CYqP4n0EGY31ac3S/scene.splinecode');
+      } catch (err) { console.warn('Spline failed to load'); }
+    }
+    initSpline();
+
+    // Quantum particles
+    const particlesContainer = document.getElementById('particles');
+    for (let i = 0; i < 60; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = Math.random() * 100 + '%';
+      p.style.animationDelay = Math.random() * 5 + 's';
+      p.style.animationDuration = (Math.random() * 3 + 3) + 's';
+      particlesContainer.appendChild(p);
+    }
+
+    const statusText = document.getElementById('status');
+    let connected = false;
+
+    async function checkArduino() {
+      try {
+        const res = await fetch('/status');
+        const data = await res.json();
+        connected = data.connected;
+        if (connected) {
+          statusText.textContent = '✅ QLock device connected';
+          statusText.className = 'connected';
+        } else {
+          statusText.textContent = '⚠️ No QLock device detected';
+          statusText.className = 'disconnected';
+        }
+      } catch {
+        statusText.textContent = '⚠️ Cannot reach backend';
+        statusText.className = 'disconnected';
+      }
+    }
+
+    // Check every 3 seconds
+    setInterval(checkArduino, 3000);
+    checkArduino();
+
+    // Button behavior
+    document.getElementById('getStarted').addEventListener('click', async () => {
+      if (connected) {
+        const btn = document.getElementById('getStarted');
+        btn.textContent = 'Quantum Channel Established...';
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+        setTimeout(() => {
+          window.location.href = 'authenticated.html';
+        }, 1500);
+      } else {
+        statusText.textContent = '❌ Cannot open quantum channel — connect QLock first';
+        statusText.className = 'disconnected';
+      }
+    });
+  </script>
+</body>
+</html>
